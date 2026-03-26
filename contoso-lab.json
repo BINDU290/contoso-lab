@@ -1,0 +1,85 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Contoso AWS Cert Lab - S3, EC2, VPC, Jump VM",
+  "Parameters": {
+    "LabVMPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Password for the Jump VM"
+    }
+  },
+  "Resources": {
+    "LabVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [{"Key": "Name", "Value": "contoso-lab-vpc"}]
+      }
+    },
+    "LabSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "LabVPC"},
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "LabS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "contoso-lab-${AWS::AccountId}"}
+      }
+    },
+    "LabSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Lab SG - RDP + HTTP",
+        "VpcId": {"Ref": "LabVPC"},
+        "SecurityGroupIngress": [
+          {"IpProtocol": "tcp", "FromPort": 3389, "ToPort": 3389, "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0"}
+        ]
+      }
+    },
+    "JumpVM": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": "t3.medium",
+        "ImageId": "ami-0c02fb55956c7d316",
+        "SubnetId": {"Ref": "LabSubnet"},
+        "SecurityGroupIds": [{"Ref": "LabSecurityGroup"}],
+        "UserData": {
+          "Fn::Base64": "#!/bin/bash\napt-get update -y\napt-get install -y xfce4 xrdp\nsystemctl enable xrdp\nsystemctl start xrdp\necho 'ubuntu:LabPassword123!' | chpasswd"
+        },
+        "Tags": [{"Key": "Name", "Value": "contoso-jump-vm"}]
+      }
+    },
+    "SmallVM": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": "t3.micro",
+        "ImageId": "ami-0c02fb55956c7d316",
+        "SubnetId": {"Ref": "LabSubnet"},
+        "SecurityGroupIds": [{"Ref": "LabSecurityGroup"}],
+        "Tags": [{"Key": "Name", "Value": "contoso-small-vm"}]
+      }
+    }
+  },
+  "Outputs": {
+    "JumpVMPublicIP": {
+      "Value": {"Fn::GetAtt": ["JumpVM", "PublicIp"]},
+      "Description": "Jump VM Public IP for RDP"
+    },
+    "S3BucketName": {
+      "Value": {"Ref": "LabS3Bucket"},
+      "Description": "S3 Lab Bucket Name"
+    },
+    "VPCId": {
+      "Value": {"Ref": "LabVPC"},
+      "Description": "VPC ID"
+    }
+  }
+}
