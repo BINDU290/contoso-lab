@@ -1,0 +1,18 @@
+{
+  "Name": "Contoso AWS Certification Practice Lab",
+  "Language": "English",
+  "Files": [
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise1.md",
+      "Order": 1
+    },
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise2.md",
+      "Order": 2
+    },
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise3.md",
+      "Order": 3
+    }
+  ]
+}
