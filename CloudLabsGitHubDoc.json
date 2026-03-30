@@ -13,6 +13,14 @@
     {
       "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise3.md",
       "Order": 3
+    },
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise4.md",
+      "Order": 4
+    },
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise5.md",
+      "Order": 5
     }
   ]
 }
