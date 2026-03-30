@@ -47,7 +47,7 @@
     "JumpVM": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "InstanceType": "t3.medium",
+        "InstanceType": "t3.micro",
         "ImageId": "ami-0c02fb55956c7d316",
         "SubnetId": {"Ref": "LabSubnet"},
         "SecurityGroupIds": [{"Ref": "LabSecurityGroup"}],
