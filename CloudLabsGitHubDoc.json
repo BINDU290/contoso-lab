@@ -3,20 +3,24 @@
   "Language": "English",
   "Files": [
     {
-      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Exercise1.md",
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise1.md",
       "Order": 1
     },
     {
-      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Exercise2.md",
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise2.md",
       "Order": 2
     },
     {
-      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Exercise3.md",
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise3.md",
       "Order": 3
     },
     {
-      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Exercise4.md",
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise4.md",
       "Order": 4
+    },
+    {
+      "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/refs/heads/main/Exercise5.md",
+      "Order": 5
     }
   ]
 }
