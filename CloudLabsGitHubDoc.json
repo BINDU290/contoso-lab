@@ -1,4 +1,5 @@
-{
+[
+  {
   "Name": "Contoso AWS Certification Practice Lab",
   "Language": "English",
   "Files": [
@@ -24,3 +25,4 @@
     }
   ]
 }
+]
