@@ -1,13 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Contoso AWS Cert Lab - S3, EC2, VPC, Jump VM",
-  "Parameters": {
-    "LabVMPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Password for the Jump VM"
-    }
-  },
+  "Description": "Contoso AWS Cert Lab - S3, EC2, VPC, Jump VM (Free Tier Compatible)",
   "Resources": {
     "LabVPC": {
       "Type": "AWS::EC2::VPC",
@@ -18,50 +11,102 @@
         "Tags": [{"Key": "Name", "Value": "contoso-lab-vpc"}]
       }
     },
+    "LabIGW": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [{"Key": "Name", "Value": "contoso-lab-igw"}]
+      }
+    },
+    "AttachIGW": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "LabVPC"},
+        "InternetGatewayId": {"Ref": "LabIGW"}
+      }
+    },
     "LabSubnet": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {"Ref": "LabVPC"},
         "CidrBlock": "10.0.1.0/24",
-        "MapPublicIpOnLaunch": true
+        "MapPublicIpOnLaunch": true,
+        "AvailabilityZone": {"Fn::Select": ["0", {"Fn::GetAZs": ""}]},
+        "Tags": [{"Key": "Name", "Value": "contoso-lab-subnet"}]
       }
     },
-    "LabS3Bucket": {
-      "Type": "AWS::S3::Bucket",
+    "LabRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "BucketName": {"Fn::Sub": "contoso-lab-${AWS::AccountId}"}
+        "VpcId": {"Ref": "LabVPC"},
+        "Tags": [{"Key": "Name", "Value": "contoso-public-rt"}]
+      }
+    },
+    "LabInternetRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachIGW",
+      "Properties": {
+        "RouteTableId": {"Ref": "LabRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "LabIGW"}
+      }
+    },
+    "SubnetRouteAssoc": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "LabSubnet"},
+        "RouteTableId": {"Ref": "LabRouteTable"}
       }
     },
     "LabSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "Lab SG - RDP + HTTP",
+        "GroupDescription": "Contoso Lab SG - RDP + HTTP + SSH",
         "VpcId": {"Ref": "LabVPC"},
         "SecurityGroupIngress": [
+          {"IpProtocol": "tcp", "FromPort": 22,   "ToPort": 22,   "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp", "FromPort": 80,   "ToPort": 80,   "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp", "FromPort": 443,  "ToPort": 443,  "CidrIp": "0.0.0.0/0"},
           {"IpProtocol": "tcp", "FromPort": 3389, "ToPort": 3389, "CidrIp": "0.0.0.0/0"},
-          {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "CidrIp": "0.0.0.0/0"},
-          {"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0"}
-        ]
+          {"IpProtocol": "tcp", "FromPort": 8080, "ToPort": 8080, "CidrIp": "0.0.0.0/0"}
+        ],
+        "Tags": [{"Key": "Name", "Value": "contoso-lab-sg"}]
+      }
+    },
+    "LabS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "Tags": [{"Key": "Name", "Value": "contoso-lab-bucket"}]
       }
     },
     "JumpVM": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "InstanceType": "t3.micro",
-        "ImageId": "ami-0c02fb55956c7d316",
+        "InstanceType": "t2.micro",
+        "ImageId": "ami-0c7217cdde317cfec",
         "SubnetId": {"Ref": "LabSubnet"},
         "SecurityGroupIds": [{"Ref": "LabSecurityGroup"}],
+        "Tags": [{"Key": "Name", "Value": "contoso-jump-vm"}],
         "UserData": {
-          "Fn::Base64": "#!/bin/bash\napt-get update -y\napt-get install -y xfce4 xrdp\nsystemctl enable xrdp\nsystemctl start xrdp\necho 'ubuntu:LabPassword123!' | chpasswd"
-        },
-        "Tags": [{"Key": "Name", "Value": "contoso-jump-vm"}]
+          "Fn::Base64": {
+            "Fn::Join": ["", [
+              "#!/bin/bash\n",
+              "apt-get update -y\n",
+              "DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp\n",
+              "systemctl enable xrdp\n",
+              "systemctl start xrdp\n",
+              "echo 'ubuntu:LabPass@2026!' | chpasswd\n",
+              "adduser xrdp ssl-cert\n",
+              "systemctl restart xrdp\n"
+            ]]
+          }
+        }
       }
     },
     "SmallVM": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "InstanceType": "t3.micro",
-        "ImageId": "ami-0c02fb55956c7d316",
+        "InstanceType": "t2.micro",
+        "ImageId": "ami-0c7217cdde317cfec",
         "SubnetId": {"Ref": "LabSubnet"},
         "SecurityGroupIds": [{"Ref": "LabSecurityGroup"}],
         "Tags": [{"Key": "Name", "Value": "contoso-small-vm"}]
@@ -71,15 +116,27 @@
   "Outputs": {
     "JumpVMPublicIP": {
       "Value": {"Fn::GetAtt": ["JumpVM", "PublicIp"]},
-      "Description": "Jump VM Public IP for RDP"
+      "Description": "Jump VM Public IP for RDP access"
+    },
+    "JumpVMUsername": {
+      "Value": "ubuntu",
+      "Description": "Jump VM login username"
+    },
+    "JumpVMPassword": {
+      "Value": "LabPass@2026!",
+      "Description": "Jump VM login password"
     },
     "S3BucketName": {
       "Value": {"Ref": "LabS3Bucket"},
       "Description": "S3 Lab Bucket Name"
     },
-    "VPCId": {
+    "VPCID": {
       "Value": {"Ref": "LabVPC"},
       "Description": "VPC ID"
+    },
+    "SubnetID": {
+      "Value": {"Ref": "LabSubnet"},
+      "Description": "Public Subnet ID"
     }
   }
 }
