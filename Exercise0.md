@@ -29,7 +29,7 @@ By the end of this lab, you will have:
 
 ## Accessing Your Lab Environment
 
-1. After clicking **Launch Lab**, wait approximately **15 minutes** for your dedicated AWS environment to be provisioned.
+1. After clicking **Launch Lab**, wait approximately **5 minutes** for your dedicated AWS environment to be provisioned.
 2. Once deployment completes, your screen will show:
    - **AWS Console URL**
    - **AWS Account ID**
