@@ -30,6 +30,11 @@ By the end of this lab, you will have:
 ## Accessing Your Lab Environment
 
 1. After clicking **Launch Lab**, wait approximately **5 minutes** for your dedicated AWS environment to be provisioned.
+
+<img width="1920" height="908" alt="Screenshot 2026-04-01 152316" src="https://github.com/user-attachments/assets/17502c85-4f8c-4edf-85df-964d43c07158" />
+
+<img width="1920" height="1080" alt="Screenshot (201)" src="https://github.com/user-attachments/assets/6a0cbafc-5f41-4749-bcca-ea332bc688a2" />
+
 2. Once deployment completes, your screen will show:
    - **AWS Console URL**
    - **AWS Account ID**
@@ -38,6 +43,8 @@ By the end of this lab, you will have:
    - **Jump VM Connect** button
 3. Click the **Connect** button next to the Jump VM to open the Linux desktop in your browser.
 4. Log in using the credentials shown in the **Environment Details** panel.
+
+<img width="1920" height="1080" alt="Screenshot (202)" src="https://github.com/user-attachments/assets/ee90a5cb-0437-434c-9d5c-686be8f7a4ab" />
 
 > **Note:** Do not close the lab tab — your session timer runs continuously from the moment you launch.
 
