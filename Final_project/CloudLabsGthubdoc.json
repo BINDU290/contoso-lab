@@ -1,0 +1,24 @@
+[
+  {
+    "Name": "Automation of Monitoring and Auditing using AWS CloudWatch and CloudTrail",
+    "Language": "English",
+    "Files": [
+      {
+        "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Final_project/Exercise1.md",
+        "Order": 1
+      },
+      {
+        "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Final_project/Exercise2.md",
+        "Order": 2
+      },
+      {
+        "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Final_project/Exercise3.md",
+        "Order": 3
+      },
+      {
+        "RawFilePath": "https://raw.githubusercontent.com/BINDU290/contoso-lab/main/Final_project/Exercise4.md",
+        "Order": 4
+      }
+    ]
+  }
+]
