@@ -1,0 +1,1034 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Automation of Monitoring and Auditing using AWS CloudWatch and CloudTrail. Automates: CloudWatch dashboards, EC2 metrics, alarms, SNS notifications, IAM roles, CloudWatch Agent, custom metrics, CloudTrail trail, S3 log storage, metric filters, and security alerts.",
+  "Parameters": {
+    "CloudLabsDeploymentID": {
+      "Type": "String",
+      "Description": "Unique Deployment ID assigned by CloudLabs",
+      "Default": "GET-DEPLOYMENT-ID"
+    },
+    "CheckAcknowledgement": {
+      "Type": "String",
+      "Default": "TRUE"
+    },
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "monitoringlab",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must be lowercase letters, numbers, and hyphens only",
+      "Description": "A name prefix for all resources (lowercase only)"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t3.micro",
+        "t3.small",
+        "t2.medium"
+      ],
+      "Description": "EC2 instance type"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "Latest Amazon Linux 2 AMI (auto-resolved)"
+    },
+    "KeyPairName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "(Optional) EC2 Key Pair name for SSH access"
+    },
+    "CPUAlarmThreshold": {
+      "Type": "Number",
+      "Default": 80,
+      "MinValue": 1,
+      "MaxValue": 100,
+      "Description": "CPU utilization % to trigger alarm"
+    },
+    "AlarmEmailAddress": {
+      "Type": "String",
+      "Default": "admin@example.com",
+      "Description": "Email address for SNS alarm notifications"
+    },
+    "LogRetentionDays": {
+      "Type": "Number",
+      "Default": 90,
+      "AllowedValues": [
+        30,
+        60,
+        90,
+        180,
+        365
+      ],
+      "Description": "Days to retain CloudWatch Logs"
+    }
+  },
+  "Conditions": {
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "MonitoringSnsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${AWS::StackName}-Alerts"
+        },
+        "DisplayName": {
+          "Fn::Sub": "${AWS::StackName} Monitoring Alerts"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "SnsEmailSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "TopicArn": {
+          "Ref": "MonitoringSnsTopic"
+        },
+        "Protocol": "email",
+        "Endpoint": {
+          "Ref": "AlarmEmailAddress"
+        }
+      }
+    },
+    "EC2MonitoringRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchCustomMetrics",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics",
+                    "ec2:DescribeTags",
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "EC2MonitoringRole"
+          }
+        ]
+      }
+    },
+    "CloudTrailLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudTrailToCloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/cloudtrail/${AWS::StackName}:*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchAgentConfig": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/AmazonCloudWatch-${AWS::StackName}/config"
+        },
+        "Type": "String",
+        "Description": "CloudWatch Agent configuration for memory and disk metrics",
+        "Value": {
+          "Fn::Sub": "{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"root\"\n  },\n  \"metrics\": {\n    \"append_dimensions\": {\n      \"InstanceId\": \"${!aws:InstanceId}\",\n      \"InstanceType\": \"${!aws:InstanceType}\"\n    },\n    \"metrics_collected\": {\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\", \"mem_available\", \"mem_total\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\", \"inodes_free\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"/\"]\n      },\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60,\n        \"totalcpu\": true\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\"file_path\": \"/var/log/messages\", \"log_group_name\": \"/ec2/${EnvironmentName}/messages\", \"log_stream_name\": \"{instance_id}\"},\n          {\"file_path\": \"/var/log/secure\", \"log_group_name\": \"/ec2/${EnvironmentName}/secure\", \"log_stream_name\": \"{instance_id}\"}\n        ]\n      }\n    }\n  }\n}"
+        }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "MonitoringVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-VPC"
+            }
+          }
+        ]
+      }
+    },
+    "MonitoringSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MonitoringVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-Subnet"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-IGW"
+            }
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MonitoringVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "RouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MonitoringVPC"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "SubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "MonitoringSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      }
+    },
+    "EC2SecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for monitored EC2 instance",
+        "VpcId": {
+          "Ref": "MonitoringVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "SSH access"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP access"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "MonitoredEC2Instance": {
+      "Type": "AWS::EC2::Instance",
+      "DependsOn": [
+        "CloudWatchAgentConfig",
+        "PublicRoute"
+      ],
+      "Properties": {
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
+        },
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
+        "SubnetId": {
+          "Ref": "MonitoringSubnet"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EC2SecurityGroup"
+          }
+        ],
+        "KeyName": {
+          "Fn::If": [
+            "HasKeyPair",
+            {
+              "Ref": "KeyPairName"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nset -e\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s \\\n  -c ssm:/AmazonCloudWatch-${AWS::StackName}/config\nsystemctl enable amazon-cloudwatch-agent\nsystemctl start amazon-cloudwatch-agent\nyum install -y stress\necho 'CloudWatch Agent setup complete' >> /var/log/setup.log\n"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-MonitoredInstance"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "CPUUtilizationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-HighCPUUtilization"
+        },
+        "AlarmDescription": {
+          "Fn::Sub": "CPU utilization exceeded ${CPUAlarmThreshold}% threshold"
+        },
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": {
+          "Ref": "CPUAlarmThreshold"
+        },
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "MonitoredEC2Instance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "NetworkInAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-HighNetworkIn"
+        },
+        "AlarmDescription": "Network inbound traffic is unusually high",
+        "MetricName": "NetworkIn",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10000000,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "MonitoredEC2Instance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "NetworkOutAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-HighNetworkOut"
+        },
+        "AlarmDescription": "Network outbound traffic is unusually high",
+        "MetricName": "NetworkOut",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10000000,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "MonitoredEC2Instance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "MemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-HighMemoryUsage"
+        },
+        "AlarmDescription": "Memory usage exceeded 80%",
+        "MetricName": "mem_used_percent",
+        "Namespace": "CWAgent",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "MonitoredEC2Instance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DiskUsageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-HighDiskUsage"
+        },
+        "AlarmDescription": "Disk usage on root volume exceeded 85%",
+        "MetricName": "disk_used_percent",
+        "Namespace": "CWAgent",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "MonitoredEC2Instance"
+            }
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          },
+          {
+            "Name": "device",
+            "Value": "xvda1"
+          },
+          {
+            "Name": "fstype",
+            "Value": "xfs"
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "${AWS::StackName}-Dashboard"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"text\",\"x\":0,\"y\":0,\"width\":24,\"height\":1,\"properties\":{\"markdown\":\"# ${EnvironmentName} - EC2 Monitoring Dashboard\"}},{\"type\":\"metric\",\"x\":0,\"y\":1,\"width\":8,\"height\":6,\"properties\":{\"title\":\"CPU Utilization (%)\",\"region\":\"${AWS::Region}\",\"metrics\":[[\"AWS/EC2\",\"CPUUtilization\",\"InstanceId\",\"${MonitoredEC2Instance}\"]],\"period\":300,\"stat\":\"Average\",\"view\":\"timeSeries\",\"annotations\":{\"horizontal\":[{\"label\":\"Alarm threshold\",\"value\":${CPUAlarmThreshold},\"color\":\"#ff0000\"}]}}},{\"type\":\"metric\",\"x\":8,\"y\":1,\"width\":8,\"height\":6,\"properties\":{\"title\":\"Network In / Out (bytes)\",\"region\":\"${AWS::Region}\",\"metrics\":[[\"AWS/EC2\",\"NetworkIn\",\"InstanceId\",\"${MonitoredEC2Instance}\",{\"label\":\"Network In\"}],[\"AWS/EC2\",\"NetworkOut\",\"InstanceId\",\"${MonitoredEC2Instance}\",{\"label\":\"Network Out\"}]],\"period\":300,\"stat\":\"Average\",\"view\":\"timeSeries\"}},{\"type\":\"alarm\",\"x\":16,\"y\":1,\"width\":8,\"height\":6,\"properties\":{\"title\":\"Active Alarms\",\"alarms\":[\"arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-HighCPUUtilization\",\"arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-HighNetworkIn\",\"arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-HighNetworkOut\",\"arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-HighMemoryUsage\",\"arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${EnvironmentName}-HighDiskUsage\"]}},{\"type\":\"metric\",\"x\":0,\"y\":7,\"width\":8,\"height\":6,\"properties\":{\"title\":\"Memory Used (%)\",\"region\":\"${AWS::Region}\",\"metrics\":[[\"CWAgent\",\"mem_used_percent\",\"InstanceId\",\"${MonitoredEC2Instance}\"]],\"period\":300,\"stat\":\"Average\",\"view\":\"timeSeries\",\"annotations\":{\"horizontal\":[{\"label\":\"Alarm threshold\",\"value\":80,\"color\":\"#ff0000\"}]}}},{\"type\":\"metric\",\"x\":8,\"y\":7,\"width\":8,\"height\":6,\"properties\":{\"title\":\"Disk Used (%)\",\"region\":\"${AWS::Region}\",\"metrics\":[[\"CWAgent\",\"disk_used_percent\",\"InstanceId\",\"${MonitoredEC2Instance}\",\"path\",\"/\",\"device\",\"xvda1\",\"fstype\",\"xfs\"]],\"period\":300,\"stat\":\"Average\",\"view\":\"timeSeries\",\"annotations\":{\"horizontal\":[{\"label\":\"Alarm threshold\",\"value\":85,\"color\":\"#ff0000\"}]}}},{\"type\":\"metric\",\"x\":16,\"y\":7,\"width\":8,\"height\":6,\"properties\":{\"title\":\"Security Events (last 24h)\",\"region\":\"${AWS::Region}\",\"metrics\":[[\"CloudTrailMetrics\",\"ConsoleLoginCount\",{\"label\":\"Console Logins\",\"stat\":\"Sum\"}],[\"CloudTrailMetrics\",\"RootAccountUsageCount\",{\"label\":\"Root Logins\",\"stat\":\"Sum\"}],[\"CloudTrailMetrics\",\"UnauthorizedAPICallCount\",{\"label\":\"Unauthorized API\",\"stat\":\"Sum\"}],[\"CloudTrailMetrics\",\"SecurityGroupChangeCount\",{\"label\":\"SG Changes\",\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"view\":\"timeSeries\"}}]}"
+        }
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "CloudTrailBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": {
+                "Ref": "LogRetentionDays"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "CloudTrailBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "DependsOn": "CloudTrailBucket",
+      "Properties": {
+        "Bucket": {
+          "Ref": "CloudTrailBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CloudTrailBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudTrailLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/cloudtrail/${AWS::StackName}"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        }
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "MonitoringTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": [
+        "CloudTrailBucketPolicy",
+        "CloudTrailLogGroup"
+      ],
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${AWS::StackName}-Trail"
+        },
+        "S3BucketName": {
+          "Ref": "CloudTrailBucket"
+        },
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "IncludeGlobalServiceEvents": true,
+        "CloudWatchLogsLogGroupArn": {
+          "Fn::GetAtt": [
+            "CloudTrailLogGroup",
+            "Arn"
+          ]
+        },
+        "CloudWatchLogsRoleArn": {
+          "Fn::GetAtt": [
+            "CloudTrailLogsRole",
+            "Arn"
+          ]
+        },
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  "arn:aws:s3:::"
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "ConsoleLoginFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "DependsOn": "MonitoringTrail",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterName": {
+          "Fn::Sub": "${AWS::StackName}-ConsoleLoginFilter"
+        },
+        "FilterPattern": "{ ($.eventName = \"ConsoleLogin\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "ConsoleLoginCount",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "RootLoginFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "DependsOn": "MonitoringTrail",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterName": {
+          "Fn::Sub": "${AWS::StackName}-RootLoginFilter"
+        },
+        "FilterPattern": "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "RootAccountUsageCount",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "UnauthorizedAPIFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "DependsOn": "MonitoringTrail",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterName": {
+          "Fn::Sub": "${AWS::StackName}-UnauthorizedAPIFilter"
+        },
+        "FilterPattern": "{ ($.errorCode = \"AccessDenied\") || ($.errorCode = \"UnauthorizedAccess\") || ($.errorCode = \"AuthFailure\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "UnauthorizedAPICallCount",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "SecurityGroupChangeFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "DependsOn": "MonitoringTrail",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterName": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupChangeFilter"
+        },
+        "FilterPattern": "{ ($.eventName = \"AuthorizeSecurityGroupIngress\") || ($.eventName = \"AuthorizeSecurityGroupEgress\") || ($.eventName = \"RevokeSecurityGroupIngress\") || ($.eventName = \"RevokeSecurityGroupEgress\") || ($.eventName = \"CreateSecurityGroup\") || ($.eventName = \"DeleteSecurityGroup\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "SecurityGroupChangeCount",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "ResourceChangeFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "DependsOn": "MonitoringTrail",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterName": {
+          "Fn::Sub": "${AWS::StackName}-ResourceChangeFilter"
+        },
+        "FilterPattern": "{ ($.eventName = \"RunInstances\") || ($.eventName = \"TerminateInstances\") || ($.eventName = \"CreateBucket\") || ($.eventName = \"DeleteBucket\") || ($.eventName = \"CreateStack\") || ($.eventName = \"DeleteStack\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "ResourceChangeCount",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "ConsoleLoginAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ConsoleLoginDetected"
+        },
+        "AlarmDescription": "Someone logged into the AWS Console",
+        "MetricName": "ConsoleLoginCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "RootLoginAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-RootAccountUsage"
+        },
+        "AlarmDescription": "CRITICAL: Root account was used",
+        "MetricName": "RootAccountUsageCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "UnauthorizedAPIAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-UnauthorizedAPICalls"
+        },
+        "AlarmDescription": "Unauthorized or denied API calls detected",
+        "MetricName": "UnauthorizedAPICallCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SecurityGroupChangeAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupChanged"
+        },
+        "AlarmDescription": "A security group was created, modified, or deleted",
+        "MetricName": "SecurityGroupChangeCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ResourceChangeAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ResourceCreatedOrDeleted"
+        },
+        "AlarmDescription": "AWS resources were created or deleted",
+        "MetricName": "ResourceChangeCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "EC2InstanceId": {
+      "Description": "ID of the monitored EC2 instance",
+      "Value": {
+        "Ref": "MonitoredEC2Instance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceId"
+        }
+      }
+    },
+    "EC2PublicIP": {
+      "Description": "Public IP of the EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "MonitoredEC2Instance",
+          "PublicIp"
+        ]
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS alerting topic",
+      "Value": {
+        "Ref": "MonitoringSnsTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "CloudTrailName": {
+      "Description": "Name of the CloudTrail trail",
+      "Value": {
+        "Ref": "MonitoringTrail"
+      }
+    },
+    "CloudTrailS3Bucket": {
+      "Description": "S3 bucket storing CloudTrail logs",
+      "Value": {
+        "Ref": "CloudTrailBucket"
+      }
+    },
+    "CloudWatchDashboardURL": {
+      "Description": "Direct URL to the CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-Dashboard"
+      }
+    },
+    "CloudTrailLogGroupName": {
+      "Description": "CloudWatch Log Group receiving CloudTrail events",
+      "Value": {
+        "Ref": "CloudTrailLogGroup"
+      }
+    },
+    "CloudWatchAgentConfigParam": {
+      "Description": "SSM Parameter name for CloudWatch Agent config",
+      "Value": {
+        "Ref": "CloudWatchAgentConfig"
+      }
+    },
+    "VPCID": {
+      "Description": "VPC ID created for this lab",
+      "Value": {
+        "Ref": "MonitoringVPC"
+      }
+    }
+  }
+}

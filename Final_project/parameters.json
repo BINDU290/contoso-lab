@@ -1,0 +1,31 @@
+{
+  "parameters": {
+    "CloudLabsDeploymentID": {
+      "value": "GET-DEPLOYMENT-ID"
+    },
+    "CheckAcknowledgement": {
+      "value": "TRUE"
+    },
+    "EnvironmentName": {
+      "value": "monitoringlab"
+    },
+    "InstanceType": {
+      "value": "t3.micro"
+    },
+    "LatestAmiId": {
+      "value": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+    },
+    "KeyPairName": {
+      "value": ""
+    },
+    "CPUAlarmThreshold": {
+      "value": "80"
+    },
+    "AlarmEmailAddress": {
+      "value": "binduramesh290@gmail.com"
+    },
+    "LogRetentionDays": {
+      "value": "90"
+    }
+  }
+}
