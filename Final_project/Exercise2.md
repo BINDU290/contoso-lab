@@ -4,7 +4,7 @@
 
 In this exercise, you will verify the CloudTrail configuration that was automatically deployed by the stack. CloudTrail is already logging all API activity across all regions, storing logs in S3, and streaming them in real-time to CloudWatch Logs — all set up automatically by CloudFormation.
 
-**Estimated Duration:** 20 minutes
+**Estimated Duration:** 15 minutes
 
 ---
 
@@ -33,10 +33,8 @@ In this exercise, you will verify the CloudTrail configuration that was automati
    | Trail status | **Logging** (green indicator) |
    | Multi-region trail | **Yes** |
    | Log file validation | **Enabled** |
-   | Include global service events | **Yes** |
-   | Management events | **All** (Read + Write) |
-   | S3 bucket | `{StackName}-cloudtrail-{AccountId}` |
    | CloudWatch Logs log group | `{StackName}-CloudTrailLogs` |
+   <img width="1920" height="832" alt="Screenshot (248)" src="https://github.com/user-attachments/assets/5cc2316c-8ee3-4a28-9df2-2d3f47237313" />
 
 4. Note the **Trail ARN** from the CloudFormation Outputs tab → confirm it matches.
 
@@ -56,18 +54,19 @@ In this exercise, you will verify the CloudTrail configuration that was automati
            └── us-east-1/
                └── {Year}/{Month}/{Day}/
    ```
+   <img width="1920" height="849" alt="Screenshot (249)" src="https://github.com/user-attachments/assets/4a37e6aa-a178-4071-aef7-e4a1409a9204" />
 
 4. After 5–15 minutes you will see `.json.gz` log files here.
 
-5. Download one → open it (use 7-Zip or `gunzip` on Linux) → it contains JSON records of every API call made.
+5. It contains JSON records of every API call made.
 
 **Verify Lifecycle Rules (cost optimization):**
 
 1. In the S3 bucket → click **Management** tab → **Lifecycle rules**.
 
-2. Confirm the rule `ArchiveLogs`:
-   - Transition to Standard-IA after **30 days**
-   - Expiration after **365 days**
+2. Confirm the rule `DeleteOldLogs` or `ArchiveLogs`:
+
+<img width="1920" height="855" alt="Screenshot (250)" src="https://github.com/user-attachments/assets/8c426daa-6287-41c0-8682-70962ef6421b" />
 
 ---
 
@@ -89,6 +88,8 @@ In this exercise, you will verify the CloudTrail configuration that was automati
    - `sourceIPAddress` — from where
    - `awsRegion` — in which region
    - `eventTime` — when
+   
+<img width="1920" height="860" alt="Screenshot (251)" src="https://github.com/user-attachments/assets/6d6329c3-c25d-44d5-88ea-512c5ac73163" />
 
 ---
 
@@ -97,6 +98,8 @@ In this exercise, you will verify the CloudTrail configuration that was automati
 1. In **CloudTrail** → **Trails** → click your trail.
 
 2. Confirm **Log file validation**: **Enabled**.
+
+<img width="1920" height="832" alt="Screenshot (248)" src="https://github.com/user-attachments/assets/0184fda8-132f-4fbd-8ff8-d1d2ae65887a" />
 
 3. Navigate to your S3 bucket → look for a folder named **CloudTrail-Digest**.
 
@@ -116,11 +119,18 @@ In this exercise, you will verify the CloudTrail configuration that was automati
    - Set **Event name** = `RunInstances`
    - Find the event where CloudFormation launched your EC2 instance
    - Click it → review the full JSON → note the `userIdentity` shows `cloudformation.amazonaws.com` as the invoker
+   <img width="1920" height="880" alt="Screenshot (252)" src="https://github.com/user-attachments/assets/75a9ad58-fe02-46a4-b3a2-e745293cabe7" />
+
+   <img width="1920" height="891" alt="Screenshot (253)" src="https://github.com/user-attachments/assets/434b508d-e346-4f00-a73d-ae325b89ebd3" />
 
 4. Try another filter:
    - Set **Event name** = `CreateTrail`
    - Find the event that created your CloudTrail trail
    - This proves CloudTrail captures its own creation event
+   
+<img width="1920" height="851" alt="Screenshot (254)" src="https://github.com/user-attachments/assets/3f33b531-130f-42ea-a946-fef8a3ee6f47" />
+
+<img width="1920" height="884" alt="Screenshot (255)" src="https://github.com/user-attachments/assets/aa860443-f4f0-430a-aff4-4a68b71eef5b" />
 
 ---
 
@@ -131,6 +141,8 @@ In this exercise, you will verify the CloudTrail configuration that was automati
 2. Click the role → click **Permissions** tab.
 
 3. Expand the inline policy `CloudTrailToCloudWatchLogs`.
+
+<img width="1920" height="857" alt="Screenshot (256)" src="https://github.com/user-attachments/assets/11dd2b0a-97a0-4002-a415-66d68ff356be" />
 
 4. Confirm the policy allows:
    - `logs:CreateLogStream`
