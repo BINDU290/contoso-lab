@@ -4,7 +4,7 @@
 
 In this exercise, you will verify the 5 CloudWatch metric filters and 5 security alarms that were automatically created by the stack. These monitor CloudTrail logs in real time and trigger instant SNS alerts for critical security events. You will test each alert type and use CloudWatch Logs Insights to query audit logs.
 
-**Estimated Duration:** 25 minutes
+**Estimated Duration:** 15 minutes
 
 ---
 
@@ -37,11 +37,14 @@ All metrics are published to namespace: **`CloudTrailMetrics`**
    | `{StackName}-UnauthorizedAPIFilter` | CloudTrailMetrics | UnauthorizedAPICallCount |
    | `{StackName}-SecurityGroupChangeFilter` | CloudTrailMetrics | SecurityGroupChangeCount |
    | `{StackName}-ResourceChangeFilter` | CloudTrailMetrics | ResourceChangeCount |
+   
+<img width="1920" height="862" alt="Screenshot (257)" src="https://github.com/user-attachments/assets/2b67cf19-792c-4ff9-bd41-b912585738a5" />
 
 4. Click **`{StackName}-ConsoleLoginFilter`** → review the filter pattern:
    ```
    { ($.eventName = "ConsoleLogin") }
    ```
+<img width="1920" height="858" alt="Screenshot (258)" src="https://github.com/user-attachments/assets/8eda6d1c-c099-4423-afb9-fb20407462cd" />
 
 5. Click **`{StackName}-SecurityGroupChangeFilter`** → review the pattern:
    ```
@@ -61,6 +64,8 @@ All metrics are published to namespace: **`CloudTrailMetrics`**
 
 2. You should now see **10 total alarms** — 5 from Exercise 1 (EC2 monitoring) + 5 security alarms:
 
+<img width="1920" height="1080" alt="Screenshot (229)" src="https://github.com/user-attachments/assets/9806ab99-500c-4679-b805-426adaea0b26" />
+
    | Alarm Name | Metric | Threshold |
    |---|---|---|
    | `{StackName}-ConsoleLoginDetected` | ConsoleLoginCount | >= 1 |
@@ -70,6 +75,8 @@ All metrics are published to namespace: **`CloudTrailMetrics`**
    | `{StackName}-ResourceCreatedOrDeleted` | ResourceChangeCount | >= 1 |
 
 3. Click **`{StackName}-RootAccountUsage`** → note its evaluation period is **1 minute** (fastest response for the most critical event).
+
+<img width="1920" height="860" alt="Screenshot (259)" src="https://github.com/user-attachments/assets/74b0601e-92f4-4750-899a-7e76b8d392d2" />
 
 ---
 
@@ -168,6 +175,8 @@ fields eventName
 | limit 20
 ```
 
+<img width="1920" height="862" alt="Screenshot (260)" src="https://github.com/user-attachments/assets/8861b347-28cc-4489-af5c-c8e76e202dfb" />
+
 4. For each query, click **Save** → enter a meaningful name → click **Save query**.
 
 ---
@@ -186,6 +195,8 @@ fields eventName
    - `ResourceChangeCount`
 
 4. Select `ConsoleLoginCount` → click **Add to graph** → confirm you see a data point from your Task 3.3 test.
+
+<img width="1920" height="825" alt="Screenshot (261)" src="https://github.com/user-attachments/assets/37551daf-a6b3-44b9-9eb7-2bac28cd97e5" />
 
 ---
 
