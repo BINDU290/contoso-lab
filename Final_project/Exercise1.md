@@ -35,6 +35,8 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 
 3. Find the stack — confirm its status is **CREATE_COMPLETE**.
 
+<img width="1920" height="449" alt="Screenshot (230)" src="https://github.com/user-attachments/assets/036c0484-73ec-4162-8da2-75e264ba15fb" />
+
 4. Click the stack → click the **Outputs** tab.
 
 5. Record these values — you will use them throughout the lab:
@@ -47,6 +49,8 @@ In this exercise, you will verify all CloudWatch resources that were automatical
    | `CloudWatchDashboardURL` | Direct URL to your dashboard |
    | `CloudWatchAgentConfigParam` | SSM parameter name holding CW Agent config |
 
+<img width="1920" height="886" alt="Screenshot (231)" src="https://github.com/user-attachments/assets/d5d33a71-214e-456b-9085-2e31a1ca5b76" />
+
 ---
 
 ## Task 1.2 — Confirm SNS Email Subscription
@@ -56,6 +60,8 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 2. Find the email with subject: **AWS Notification - Subscription Confirmation**.
 
 3. Click **Confirm subscription**.
+
+<img width="1920" height="487" alt="Screenshot (232)" src="https://github.com/user-attachments/assets/390fc2f6-cc14-4953-894e-37c63d9e8202" />
 
 > **Important:** If you do not confirm, you will receive no alarm emails throughout this lab.
 
@@ -76,6 +82,8 @@ In this exercise, you will verify all CloudWatch resources that were automatical
    | Memory Used % | CloudWatch Agent custom | `CWAgent` |
    | Disk Used % | CloudWatch Agent custom | `CWAgent` |
 
+   <img width="1920" height="884" alt="Screenshot (244)" src="https://github.com/user-attachments/assets/70e983b8-2053-471d-a237-ae744e8e6c2b" />
+
 > **Note:** Memory and Disk widgets may show "Insufficient Data" for the first 3–5 minutes while the CloudWatch Agent warms up.
 
 ---
@@ -84,7 +92,9 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 
 1. Navigate to **CloudWatch** → **Alarms** → **All alarms**.
 
-2. Confirm all 5 EC2 monitoring alarms exist:
+<img width="1920" height="844" alt="Screenshot (233)" src="https://github.com/user-attachments/assets/730443b8-7671-4edd-9645-8d9d21ba4900" />
+
+2. Confirm all alarms exist:
 
    | Alarm Name | Metric | Namespace | Threshold |
    |---|---|---|---|
@@ -97,6 +107,10 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 3. Click **`{StackName}-HighCPUUtilization`** → review:
    - **Actions** section shows the SNS topic ARN
    - **Details** shows evaluation period: 2 consecutive periods of 5 minutes
+   
+   <img width="1920" height="857" alt="Screenshot (245)" src="https://github.com/user-attachments/assets/ad79929f-5b3a-4117-adaf-b04997760c07" />
+
+<img width="1920" height="851" alt="Screenshot (235)" src="https://github.com/user-attachments/assets/86837256-8f5f-4282-86f9-9b4baf7a4ac7" />
 
 ---
 
@@ -105,6 +119,8 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 **Verify the IAM Role:**
 
 1. Navigate to **IAM** → **Roles** → search for `EC2MonitoringRole` or `monitoringlab`.
+
+<img width="1920" height="857" alt="Screenshot (236)" src="https://github.com/user-attachments/assets/cfff4289-93ee-4f1d-94c0-73f6eb50343d" />
 
 2. Click the role → confirm these policies are attached:
    - `CloudWatchAgentServerPolicy` (managed)
@@ -117,13 +133,20 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 
 2. Find the parameter: `/AmazonCloudWatch-{StackName}/config`
 
+<img width="1920" height="735" alt="Screenshot (237)" src="https://github.com/user-attachments/assets/e62df9e8-f9e5-452c-8ee9-ea805fd3a1b6" />
+
 3. Click it → click **Value** tab → you will see the JSON configuration that tells the agent to collect:
    - `mem_used_percent`, `mem_available`, `mem_total` every 60 seconds
    - `disk_used_percent`, `inodes_free` on the root volume every 60 seconds
 
+<img width="1920" height="851" alt="Screenshot (238)" src="https://github.com/user-attachments/assets/84bfaacf-4c22-45c6-ac7f-8067cb7466c6" />
+
 **Verify the Agent is Running on EC2:**
 
 1. Navigate to **EC2** → **Instances** → select your instance → **Connect** → **EC2 Instance Connect** → **Connect**.
+
+
+<img width="1920" height="847" alt="Screenshot (239)" src="https://github.com/user-attachments/assets/c92926e0-66d8-4ec0-9367-1a19bc50f378" />
 
 2. Run:
    ```bash
@@ -131,17 +154,13 @@ In this exercise, you will verify all CloudWatch resources that were automatical
    ```
    Expected: `active (running)`
 
-3. Check the setup log created by UserData:
-   ```bash
-   cat /var/log/setup.log
-   ```
-   Expected output: `CloudWatch Agent setup complete`
-
-4. Verify the agent config was fetched from SSM:
+3. Verify the agent config was fetched from SSM:
    ```bash
    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
    ```
    Expected: `"status": "running"`
+
+<img width="1920" height="899" alt="Screenshot (240)" src="https://github.com/user-attachments/assets/c46dc205-ff54-482e-88d5-ae8c31303768" />
 
 ---
 
@@ -151,12 +170,13 @@ In this exercise, you will verify all CloudWatch resources that were automatical
 
 2. Find namespace **CWAgent**.
 
+<img width="1920" height="905" alt="Screenshot (241)" src="https://github.com/user-attachments/assets/60f0b1f2-f5dc-454d-9cb0-887b23ee0c63" />
+
 3. Click **CWAgent** → **ImageId, InstanceId, InstanceType, device, fstype, path**.
 
-4. Confirm these metrics are listed:
-   - `disk_used_percent`
-   - `mem_used_percent`
-   - `mem_available`
+4. Confirm the metrics are listed:
+
+<img width="1920" height="860" alt="Screenshot (243)" src="https://github.com/user-attachments/assets/574d9194-d972-4968-b2a1-d658afe9b18c" />
 
 5. Check the checkbox next to `mem_used_percent` → click **Add to graph** → confirm data points appear.
 
@@ -170,12 +190,14 @@ In this exercise, you will verify all CloudWatch resources that were automatical
    ```bash
    stress --cpu 2 --timeout 360
    ```
+   <img width="1920" height="419" alt="Screenshot (246)" src="https://github.com/user-attachments/assets/142e877d-0bfc-435b-bda9-ca9dedaea822" />
 
 3. Leave this running and wait **5–6 minutes**.
 
 4. In a new browser tab, go to **CloudWatch** → **Alarms** → **`{StackName}-HighCPUUtilization`**.
 
 5. The alarm state changes from **OK** → **In alarm** (shown in red).
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/6d2093a9-9fd2-46e8-afc1-6efafeedfc4d" />
 
 6. Check your email — you should receive:
    > Subject: **ALARM: "{StackName}-HighCPUUtilization" in US East**
